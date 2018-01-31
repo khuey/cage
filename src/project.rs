@@ -1,6 +1,5 @@
 //! A cage project.
 
-#[cfg(test)]
 use compose_yml::v2 as dc;
 use semver;
 use serde::{Serialize, Serializer};
@@ -32,6 +31,8 @@ use serde_helpers::deserialize_parsable_opt;
 use service_locations::ServiceLocations;
 use util::{ConductorPathExt, ToStrOrErr};
 use version;
+
+use self::dc::InterpolateAll;
 
 // TODO: This old-style serde `include!` should be inline or a module.
 include!("project_config.in.rs");
@@ -429,6 +430,7 @@ impl Project {
     fn output_helper(
         &self,
         op: Operation,
+        interp: dc::InterpolateMissing,
         subcommand: &str,
         export_dir: &Path,
     ) -> Result<()> {
@@ -459,7 +461,8 @@ impl Project {
                 // Combine targets, make it standalone, tweak as needed, and
                 // output.
                 let mut file = try!(pod.merged_file(&self.current_target));
-                try!(file.make_standalone(&self.pods_dir()));
+                try!(file.interpolate_all(interp));
+                try!(file.inline_all(&self.pods_dir()));
                 let ctx = plugins::Context::new(self, pod, subcommand);
                 try!(self.plugins().transform(op, &ctx, &mut file));
                 try!(file.write_to_path(out_path));
@@ -481,13 +484,14 @@ impl Project {
                 .map_err(|e| err!("Cannot delete {}: {}", out_pods.display(), e))?;
         }
 
-        self.output_helper(Operation::Output, subcommand, &out_pods)
+        self.output_helper(Operation::Output, dc::InterpolateMissing::Error,
+                           subcommand, &out_pods)
     }
 
     /// Export this project (with the specified target applied) as a set
     /// of standalone `*.yml` files with no environment variable
     /// interpolations and no external dependencies.
-    pub fn export(&self, export_dir: &Path) -> Result<()> {
+    pub fn export(&self, allow_missing_env: bool, export_dir: &Path) -> Result<()> {
         // Don't clobber an existing directory.
         if export_dir.exists() {
             return Err(err!(
@@ -501,7 +505,12 @@ impl Project {
             warn!("Exporting project without --default-tags");
         }
 
-        self.output_helper(Operation::Export, "export", export_dir)
+        let interp = if allow_missing_env {
+            dc::InterpolateMissing::Passthrough
+        } else {
+            dc::InterpolateMissing::Error
+        };
+        self.output_helper(Operation::Export, interp, "export", export_dir)
     }
 }
 
@@ -734,7 +743,7 @@ fn export_creates_a_directory_of_flat_yml_files() {
     let mut proj = Project::from_example("rails_hello").unwrap();
     let export_dir = proj.output_dir.join("hello_export");
     proj.set_current_target_name("production").unwrap();
-    proj.export(&export_dir).unwrap();
+    proj.export(false, &export_dir).unwrap();
     assert!(export_dir.join("frontend.yml").exists());
     assert!(!export_dir.join("db.yml").exists());
     assert!(export_dir.join("tasks").join("rake.yml").exists());
@@ -755,7 +764,7 @@ fn export_applies_expected_transforms() {
         .unwrap();
     source.fake_clone_source(&proj).unwrap();
     let export_dir = proj.output_dir.join("hello_export");
-    proj.export(&export_dir).unwrap();
+    proj.export(false, &export_dir).unwrap();
 
     // Load the generated file and look at the `web` service we cloned.
     let frontend_file = export_dir.join("frontend.yml");

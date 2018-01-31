@@ -322,7 +322,8 @@ fn run(matches: &clap::ArgMatches) -> Result<()> {
         }
         "export" => {
             let dir = sc_matches.value_of("DIR").unwrap();
-            proj.export(Path::new(dir))?;
+            let passthrough = sc_matches.is_present("passthrough");
+            proj.export(passthrough, Path::new(dir))?;
         }
         unknown => unreachable!("Unexpected subcommand '{}'", unknown),
     }

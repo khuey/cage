@@ -284,6 +284,11 @@ subcommands:
   - export:
       about: "Export project as flattened *.yml files"
       args:
+        - passthrough:
+            long: "passthrough"
+            help: |
+              If an environment variable that would be interpolated is missing,
+              pass it through to docker-compose.
         - DIR:
             value_name: "DIR"
             required: true
