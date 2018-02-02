@@ -42,6 +42,10 @@ impl DefaultTags {
         let reader = io::BufReader::new(r);
         for line_result in reader.lines() {
             let line = line_result?;
+            if line.starts_with("#") {
+                // Treat it as a comment.
+                continue;
+            }
             let image = dc::Image::from_str(&line)?;
             if let (key, Some(_)) = (image.without_tag(), image.tag.as_ref()) {
                 match tags.entry(key.to_owned()) {
@@ -84,6 +88,7 @@ impl DefaultTags {
 #[test]
 fn defaults_tags_using_data_from_file() {
     let file = "example.com/app1:30
+# This is a comment and shouldn't show up.
 alpine:4.3
 ";
     let cursor = io::Cursor::new(file);
