@@ -41,7 +41,7 @@ impl CommandUp for Project {
     where
         CR: CommandRunner,
     {
-        let pods_or_services = act_on.pods_or_services(self)
+        let pods_or_services = act_on.pods_or_services(self)?
             // TODO LOW: Refactor this into a `filter_result` helper?
             .filter(|v| {
                 match *v {

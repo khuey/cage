@@ -75,6 +75,12 @@ error_chain! {
             display("could not write to '{}'", path.display())
         }
 
+        /// The specified `depends_on` forms a cycle.
+        DependsOnCycle(pod1: String, pod2: String) {
+            description("depends_on formed a cycle")
+            display("'{}' depends_on '{}', but that forms a cycle", pod1, pod2)
+        }
+
         /// A feature was disabled at compile time.
         FeatureDisabled {
             description("feature disabled at compile time")

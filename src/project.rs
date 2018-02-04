@@ -1,10 +1,13 @@
 //! A cage project.
 
 use compose_yml::v2 as dc;
+use daggy::Dag;
+use daggy::petgraph::algo;
 use semver;
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeMap;
 use serde_yaml;
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io;
@@ -286,16 +289,40 @@ impl Project {
     }
 
     /// Iterate over all pods in this project.
-    pub fn pods(&self) -> Pods {
-        Pods {
-            iter: self.pods.iter(),
+    pub fn ordered_pods(&self) -> Result<Pods> {
+        let mut dag = Dag::with_capacity(self.pods.len() + 1, self.pods.len());
+        let mut node_table = HashMap::with_capacity(self.pods.len());
+        // Add a root node.
+        let root = dag.add_node(None);
+        // Populate the table.
+        for pod in self.pods.iter() {
+            let (_, index) = dag.add_child(root, (), Some(pod));
+            node_table.insert(pod.name(), index);
         }
+        // Add dependency edges.
+        for pod in self.pods.iter() {
+            if !pod.depends_on().is_empty() {
+                assert!(pod.pod_type() == PodType::Service);
+                let pod_index = node_table.get(pod.name()).unwrap();
+                for prereq in pod.depends_on().iter() {
+                    let prereq_index = node_table.get(&prereq[..]).unwrap();
+                    if let Err(_) = dag.add_edge(*prereq_index, *pod_index, ()) {
+                        return Err(ErrorKind::DependsOnCycle(pod.name().to_string(),
+                                                             prereq.clone()).into());
+                    }
+                }
+            }
+        }
+
+        Ok(Pods {
+            dag: dag,
+        })
     }
 
     /// Look up the named pod.
     pub fn pod(&self, name: &str) -> Option<&Pod> {
         // TODO LOW: Do we want to store pods in a BTreeMap by name?
-        self.pods().find(|pod| pod.name() == name)
+        self.pods.iter().find(|pod| pod.name() == name)
     }
 
     /// Look up the named service.  Returns the pod containing the service
@@ -415,7 +442,7 @@ impl Project {
     pub fn enabled_pods_that_are_not_running(&self) -> Result<Vec<&Pod>> {
         let mut result = vec![];
         let state = RuntimeState::for_project(self)?;
-        for pod in self.pods() {
+        for pod in self.pods.iter() {
             if pod.enabled_in(&self.current_target) && pod.pod_type() != PodType::Task
                 && !state.all_services_in_pod_are_running(pod)
             {
@@ -530,14 +557,38 @@ impl Serialize for Project {
 pub struct Pods<'a> {
     /// Our wrapped iterator.  We wrap this in our own struct to make the
     /// underlying type opaque.
-    iter: slice::Iter<'a, Pod>,
+    dag: Dag<Option<&'a Pod>, ()>,
 }
 
-impl<'a> Iterator for Pods<'a> {
+impl<'a> IntoIterator for Pods<'a> {
     type Item = &'a Pod;
+    type IntoIter = Box<Iterator<Item = &'a Pod> + 'a>;
 
-    fn next(&mut self) -> Option<&'a Pod> {
-        self.iter.next()
+    fn into_iter(self) -> Self::IntoIter {
+        let graph = self.dag.into_graph();
+        // We can unwrap here because we filtered out cycles earlier.
+        Box::new(algo::toposort(&graph, None).unwrap()
+                 .into_iter()
+                 .filter_map(move |i| *graph.node_weight(i).unwrap()))
+    }
+}
+
+impl<'a> Pods<'a> {
+    /// Convert this set of Pods into an iterator but skip all Tasks.
+    pub fn into_iter_without_tasks(self) -> Box<Iterator<Item = &'a Pod> + 'a> {
+        let graph = self.dag.into_graph();
+        // We can unwrap here because we filtered out cycles earlier.
+        // Tasks are not allowed to depend on other pods so we can filter them
+        // out here without issue.
+        Box::new(algo::toposort(&graph, None).unwrap()
+                 .into_iter()
+                 .filter_map(move |i| *graph.node_weight(i).unwrap())
+                 .filter(|pod| {
+                     match pod.pod_type() {
+                         PodType::Placeholder | PodType::Service => true,
+                         PodType::Task => false,
+                     }
+                 }))
     }
 }
 

@@ -1,11 +1,11 @@
 //! Specifying the pods, services or both acted on by a command.
 
-use std::iter::Filter;
+use std::fmt;
 use std::slice;
 
 use errors::*;
-use pod::{Pod, PodType};
-use project::{PodOrService, Pods, Project};
+use pod::Pod;
+use project::{PodOrService, Project};
 
 /// The names of pods, services or both to pass to one of our commands.
 #[derive(Debug)]
@@ -21,40 +21,35 @@ pub enum ActOn {
 
 impl ActOn {
     /// Iterate over the pods or services specified by this `ActOn` object.
-    pub fn pods_or_services<'a>(&'a self, project: &'a Project) -> PodsOrServices<'a> {
+    pub fn pods_or_services<'a>(&'a self, project: &'a Project) -> Result<PodsOrServices<'a>> {
         let state = match *self {
-            ActOn::All => State::PodIter(project.pods()),
-            ActOn::AllExceptTasks => {
-                let iter =
-                    project.pods().filter(all_except_tasks as fn(&&Pod) -> bool);
-                State::FilteredPodIter(iter)
-            }
+            ActOn::All => State::PodIter(project.ordered_pods()?.into_iter()),
+            ActOn::AllExceptTasks => State::PodIter(project.ordered_pods()?.into_iter_without_tasks()),
             ActOn::Named(ref names) => State::NameIter(names.into_iter()),
         };
-        PodsOrServices {
+        Ok(PodsOrServices {
             project: project,
             state: state,
-        }
+        })
     }
 }
 
-/// A filter function which excludes `PodType::Task` pods.  We could use an
-/// inline closure for this, but it's annoying to stick Rust closures into
-/// structs, because the types get too complicated.
-fn all_except_tasks(pod: &&Pod) -> bool {
-    pod.pod_type() != PodType::Task
-}
-
 /// Internal state for `PodsOrServices` iterator.
-#[derive(Debug)]
 #[cfg_attr(feature = "clippy", allow(enum_variant_names))]
 enum State<'a> {
     /// This corresponds to `ActOn::All`.
-    PodIter(Pods<'a>),
-    /// This corresponds to `ActOn::All`.
-    FilteredPodIter(Filter<Pods<'a>, fn(&&Pod) -> bool>),
+    PodIter(Box<Iterator<Item = &'a Pod> + 'a >),
     /// This corresponds to `ActOn::Named`.
     NameIter(slice::Iter<'a, String>),
+}
+
+impl<'a> fmt::Debug for State<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            State::PodIter(_) => f.write_str("State::PodIter"),
+            State::NameIter(_) => f.write_str("State::NameIter"),
+        }
+    }
 }
 
 /// An iterator over the pods or services specified by an `ActOn` value.
@@ -73,9 +68,6 @@ impl<'a> Iterator for PodsOrServices<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.state {
             State::PodIter(ref mut iter) => {
-                iter.next().map(|pod| Ok(PodOrService::Pod(pod)))
-            }
-            State::FilteredPodIter(ref mut iter) => {
                 iter.next().map(|pod| Ok(PodOrService::Pod(pod)))
             }
             State::NameIter(ref mut iter) => if let Some(name) = iter.next() {

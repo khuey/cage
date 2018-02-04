@@ -294,6 +294,11 @@ impl Pod {
         &self.config.run_on_init
     }
 
+    /// The pods that must be started before this.
+    pub fn depends_on(&self) -> &Vec<String> {
+        &self.config.depends_on
+    }
+
     /// Run a named script for specified service name
     pub fn run_script<CR>(
         &self,

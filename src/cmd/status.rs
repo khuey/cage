@@ -29,7 +29,7 @@ impl CommandStatus for Project {
         CR: CommandRunner,
     {
         let state = RuntimeState::for_project(self)?;
-        for pod_or_service in act_on.pods_or_services(self) {
+        for pod_or_service in act_on.pods_or_services(self)? {
             match pod_or_service? {
                 PodOrService::Pod(pod) => self.pod_status(&state, pod)?,
                 PodOrService::Service(pod, service_name) => {

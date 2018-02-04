@@ -58,7 +58,7 @@ impl CommandCompose for Project {
     where
         CR: CommandRunner,
     {
-        for pod_or_service in act_on.pods_or_services(self) {
+        for pod_or_service in act_on.pods_or_services(self)? {
             match pod_or_service? {
                 PodOrService::Pod(pod) => {
                     self.compose_pod(runner, command, pod, opts)?;
@@ -133,7 +133,7 @@ fn runs_docker_compose_on_all_pods() {
          "-p",
          "railshello",
          "-f",
-         proj.output_dir().join("pods").join("db.yml"),
+         proj.output_dir().join("pods").join("rake.yml"),
          "stop"],
         ["docker-compose",
          "-p",
@@ -145,7 +145,7 @@ fn runs_docker_compose_on_all_pods() {
          "-p",
          "railshello",
          "-f",
-         proj.output_dir().join("pods").join("rake.yml"),
+         proj.output_dir().join("pods").join("db.yml"),
          "stop"]
     });
 

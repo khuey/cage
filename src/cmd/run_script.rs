@@ -34,7 +34,7 @@ impl CommandRunScript for Project {
     {
         let target = self.current_target();
 
-        for pod_or_service in act_on.pods_or_services(self) {
+        for pod_or_service in act_on.pods_or_services(self)? {
             match pod_or_service? {
                 PodOrService::Pod(pod) => {
                     // Ignore any pods that aren't enabled in the current target

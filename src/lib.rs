@@ -61,6 +61,7 @@
 extern crate boondock;
 extern crate colored;
 extern crate compose_yml;
+extern crate daggy;
 #[cfg(test)]
 extern crate env_logger;
 #[macro_use]
