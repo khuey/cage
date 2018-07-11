@@ -12,9 +12,14 @@ use project::{PodOrService, Project};
 pub enum ActOn {
     /// Act upon all the pods and/or services associated with this project.
     All,
+    /// Act upon all the pods and/or services associated with this project, in reverse order.
+    AllReversed,
     /// Act on services except those defined in `Pod`s of type
     /// `PodType::Task`.
     AllExceptTasks,
+    /// Act on services except those defined in `Pod`s of type
+    /// `PodType::Task`, reversed.
+    AllExceptTasksReversed,
     /// Act upon only the named pods and/or services.
     Named(Vec<String>),
 }
@@ -24,13 +29,25 @@ impl ActOn {
     pub fn pods_or_services<'a>(&'a self, project: &'a Project) -> Result<PodsOrServices<'a>> {
         let state = match *self {
             ActOn::All => State::PodIter(project.ordered_pods()?.into_iter()),
+            ActOn::AllReversed => State::PodIter(project.ordered_pods()?.into_iter_reversed()),
             ActOn::AllExceptTasks => State::PodIter(project.ordered_pods()?.into_iter_without_tasks()),
+            ActOn::AllExceptTasksReversed => State::PodIter(project.ordered_pods()?.into_iter_without_tasks_reversed()),
             ActOn::Named(ref names) => State::NameIter(names.into_iter()),
         };
         Ok(PodsOrServices {
             project: project,
             state: state,
         })
+    }
+    /// Reverse this `ActOn` object.
+    pub fn reverse(self) -> ActOn {
+        match self {
+            ActOn::All => ActOn::AllReversed,
+            ActOn::AllReversed => ActOn::All,
+            ActOn::AllExceptTasks => ActOn::AllExceptTasksReversed,
+            ActOn::AllExceptTasksReversed => ActOn::AllExceptTasks,
+            x => x,
+        }
     }
 }
 

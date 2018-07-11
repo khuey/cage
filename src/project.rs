@@ -590,6 +590,34 @@ impl<'a> Pods<'a> {
                      }
                  }))
     }
+
+    /// Convert this set of Pods into a reversed iterator.
+    pub fn into_iter_reversed(self) -> Box<Iterator<Item = &'a Pod> + 'a> {
+        let mut graph = self.dag.into_graph();
+        graph.reverse();
+        // We can unwrap here because we filtered out cycles earlier.
+        Box::new(algo::toposort(&graph, None).unwrap()
+                 .into_iter()
+                 .filter_map(move |i| *graph.node_weight(i).unwrap()))
+    }
+
+    /// Convert this set of Pods into a reversed iterator but skip all Tasks.
+    pub fn into_iter_without_tasks_reversed(self) -> Box<Iterator<Item = &'a Pod> + 'a> {
+        let mut graph = self.dag.into_graph();
+        graph.reverse();
+        // We can unwrap here because we filtered out cycles earlier.
+        // Tasks are not allowed to depend on other pods so we can filter them
+        // out here without issue.
+        Box::new(algo::toposort(&graph, None).unwrap()
+                 .into_iter()
+                 .filter_map(move |i| *graph.node_weight(i).unwrap())
+                 .filter(|pod| {
+                     match pod.pod_type() {
+                         PodType::Placeholder | PodType::Service => true,
+                         PodType::Task => false,
+                     }
+                 }))
+    }
 }
 
 /// An iterator over the targets in a project.
