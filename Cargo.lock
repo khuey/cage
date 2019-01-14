@@ -221,7 +221,7 @@ dependencies = [
 [[package]]
 name = "compose_yml"
 version = "0.0.54"
-source = "git+https://github.com/khuey/compose_yml?branch=env_rework#94446e2316142d8d488d386d7360f84bf9e415ca"
+source = "git+https://github.com/khuey/compose_yml?branch=env_rework#8fd1a93b927fcccc3dbe42e38c1e40ccc3b102df"
 dependencies = [
  "error-chain 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
